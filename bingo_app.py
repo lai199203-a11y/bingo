@@ -25,17 +25,25 @@ def get_taipei_time():
 TARGET_URL = "https://www.pilio.idv.tw/bingo/list.asp"
 
 st.set_page_config(page_title="BINGO AI 專業分析儀", layout="wide")
-st.title("🛡️ BINGO 賓果最強分析儀 (回測優化版)")
+st.title("🛡️ BINGO 賓果最強分析儀 (樣本精細調校版)")
 
 if 'history' not in st.session_state:
     st.session_state.history = []
 if 'last_draw_data' not in st.session_state:
     st.session_state.last_draw_data = []
 
-# --- [3. 側邊欄] ---
+# --- [3. 側邊欄：修改樣本數單位] ---
 st.sidebar.header("📊 參數設定")
-star_count = st.sidebar.slider("預測星數", 1, 10, 3)
-analysis_range = st.sidebar.select_slider("分析樣本數 (期數)", options=[100, 500, 1000, 2000], value=1000)
+star_count = st.sidebar.slider("預測星數", 1, 10, 2) # 預設改為 2 星
+
+# 修改這裡：從原本的固定選項改為 100~2000，每 100 為一格
+analysis_range = st.sidebar.slider(
+    "分析樣本數 (期數)", 
+    min_value=100, 
+    max_value=2000, 
+    value=500, 
+    step=100
+)
 
 if st.sidebar.button("🗑️ 清除所有歷史紀錄"):
     st.session_state.history = []
@@ -82,18 +90,15 @@ def advanced_analysis(all_nums, star, limit):
 
 # --- [5. 強制檢查版回測功能] ---
 def run_backtest(all_nums, star, limit):
-    sim_rounds = 100 # 預計模擬 100 期
+    sim_rounds = 100 
     hits_count = {i: 0 for i in range(star + 1)}
-    
     total_periods = len(all_nums) // 20
-    status_text = st.empty() # 建立一個動態文字區塊
-    status_text.info(f"🔍 檢查數據中... 目前資料庫共有 {total_periods} 期資料。")
+    status_text = st.empty()
     
-    # 強制檢查數據量是否夠跑 100 期
     if total_periods < (sim_rounds + limit):
         sim_rounds = total_periods - limit - 2
         if sim_rounds <= 0:
-            st.error(f"❌ 數據量不足！需要至少 {limit+5} 期才能分析，請調小樣本數。")
+            st.error(f"❌ 數據量不足！目前資料僅有 {total_periods} 期，無法支援分析樣本 {limit} 期的回測。請調小樣本數。")
             return None, 0
         status_text.warning(f"⚠️ 數據量較少，自動調整模擬期數為：{sim_rounds} 期")
     else:
@@ -104,13 +109,9 @@ def run_backtest(all_nums, star, limit):
         cut_idx = i * 20
         past_data = all_nums[cut_idx : cut_idx + (limit * 20)]
         real_outcome = all_nums[cut_idx - 20 : cut_idx]
-        
-        # 執行預測演算法
         pred = advanced_analysis(past_data, star, limit)
         hits = len([n for n in pred if n in real_outcome])
         hits_count[hits] += 1
-        
-        # 每跑 10% 更新一次進度條與文字
         if i % 10 == 0 or i == 1:
             bar.progress((sim_rounds - i + 1) / sim_rounds)
             status_text.info(f"運算中... 已完成 {sim_rounds - i + 1} / {sim_rounds} 期")
@@ -153,7 +154,6 @@ with col2:
     if st.button("🧪 跑歷史回測 (顯示進度)"):
         all_raw = fetch_data()
         if all_raw:
-            # 這裡不使用 spinner，因為 run_backtest 裡面有自己的 status_text 和進度條
             results, rounds = run_backtest(all_raw, star_count, analysis_range)
             if results:
                 st.markdown(f"#### 📊 最近 {rounds} 期命中分佈")
