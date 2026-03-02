@@ -34,31 +34,47 @@ if 'history' not in st.session_state:
 star_count = st.sidebar.slider("預測星數", 1, 10, 3)
 
 # --- [2. 雲端專用數據抓取邏輯] ---
+# --- [2. 雲端專用數據抓取邏輯 - 自動匹配版本] ---
 def fetch_data():
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
-    # 避免被網站偵測為機器人
+    # 指定雲端 Chromium 的位置
+    options.binary_location = "/usr/bin/chromium"
+    
+    # 避免被網站偵測
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     
     try:
-        service = Service(ChromeDriverManager().install())
+        # 關鍵修正：直接指定使用雲端預裝的驅動，不透過 WebDriver Manager 強制下載舊版
+        service = Service("/usr/bin/chromedriver") 
         driver = webdriver.Chrome(service=service, options=options)
+        
         driver.get(TARGET_URL)
         time.sleep(5) 
         
         page_text = driver.find_element("tag name", "body").text
-        # 抓取所有 01-80 的數字
         matches = re.findall(r'\b\d{2}\b', page_text)
         final_nums = [int(n) for n in matches if 1 <= int(n) <= 80]
         driver.quit()
         return final_nums
     except Exception as e:
-        st.error(f"❌ 數據抓取失敗: {e}")
-        return []
+        # 如果路徑失敗，嘗試備用方案
+        try:
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
+            driver.get(TARGET_URL)
+            page_text = driver.find_element("tag name", "body").text
+            matches = re.findall(r'\b\d{2}\b', page_text)
+            final_nums = [int(n) for n in matches if 1 <= int(n) <= 80]
+            driver.quit()
+            return final_nums
+        except:
+            st.error(f"❌ 數據抓取失敗: {e}")
+            return []
 
 # --- [3. ABC 綜合加權演算法] ---
 def advanced_analysis(all_nums, star):
